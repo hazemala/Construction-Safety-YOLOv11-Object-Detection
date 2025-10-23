@@ -4,35 +4,30 @@ import tempfile
 import numpy as np
 from ultralytics import YOLO
 from PIL import Image
-import time
+from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
 
 # ----------------------------------------------
 # 🧠 App Configuration
 # ----------------------------------------------
 st.set_page_config(page_title="YOLO Object Detection", layout="wide")
 st.title("🧠 YOLO Object Detection App")
-st.markdown("Upload an image, video, or use your webcam for real-time YOLO detection.")
+st.markdown("Upload an image, video, or use webcam for real-time object detection using YOLO.")
 
 # ----------------------------------------------
 # ⚙️ Sidebar Configuration
 # ----------------------------------------------
 st.sidebar.header("⚙️ Settings")
-
 confidence = st.sidebar.slider("Confidence Threshold", 0.1, 1.0, 0.5, 0.05)
 
 # ----------------------------------------------
-# 🧩 Load Model
+# 🧩 Load Model (single model for all modes)
 # ----------------------------------------------
 @st.cache_resource
 def load_model():
-    model = YOLO('best.onnx')
+    model = YOLO("best.pt")  # 🔹 Replace with your trained YOLO model
     return model
 
-try:
-    model = load_model()
-except Exception as e:
-    st.error(f"❌ Failed to load model: {e}")
-    st.stop()
+model = load_model()
 
 # ----------------------------------------------
 # 🎛️ Mode Selection
@@ -49,6 +44,7 @@ if mode == "Image":
         image = Image.open(uploaded_image)
         img_np = np.array(image)
 
+        # Inference
         results = model(img_np, conf=confidence)
         annotated = results[0].plot()
 
@@ -74,9 +70,7 @@ elif mode == "Video":
 
         progress = st.progress(0)
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-
         frame_count = 0
-        stframe = st.empty()
 
         while cap.isOpened():
             ret, frame = cap.read()
@@ -86,7 +80,6 @@ elif mode == "Video":
             results = model(frame, conf=confidence)
             annotated_frame = results[0].plot()
             out.write(annotated_frame)
-            stframe.image(annotated_frame, channels="BGR", use_column_width=True)
 
             frame_count += 1
             progress.progress(min(frame_count / total_frames, 1.0))
@@ -97,42 +90,20 @@ elif mode == "Video":
         st.video(out_path)
 
 # ----------------------------------------------
-# 🧍 Webcam Mode (Image or Video)
+# 🧍 Webcam Mode (works online)
 # ----------------------------------------------
 elif mode == "Webcam":
-    st.subheader("🎥 Webcam Detection")
+    st.markdown("🎥 **Webcam mode active — works online via browser.**")
 
-    webcam_mode = st.radio("Select Webcam Mode", ["Live Stream", "Capture Image"])
-    run = st.button("▶️ Start Webcam")
-
-    FRAME_WINDOW = st.image([])
-    stop_button = st.button("⏹ Stop")
-
-    cap = None
-
-    if run:
-        cap = cv2.VideoCapture(0)
-        st.info("Webcam started. Press '⏹ Stop' to end.")
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                st.warning("No webcam detected.")
-                break
-
-            results = model(frame, conf=confidence)
+    class YOLOVideoTransformer(VideoTransformerBase):
+        def transform(self, frame):
+            img = frame.to_ndarray(format="bgr24")
+            results = model(img, conf=confidence)
             annotated_frame = results[0].plot()
+            return annotated_frame
 
-            if webcam_mode == "Capture Image":
-                FRAME_WINDOW.image(annotated_frame, channels="BGR", use_column_width=True)
-                time.sleep(0.5)
-                break
-            else:
-                FRAME_WINDOW.image(annotated_frame, channels="BGR", use_column_width=True)
-
-            if stop_button:
-                st.warning("⏹ Webcam stopped.")
-                break
-
-        cap.release()
-    else:
-        st.info("Activate the webcam by checking the '▶️ Start Webcam' box.")
+    webrtc_streamer(
+        key="yolo-webcam",
+        video_transformer_factory=YOLOVideoTransformer,
+        media_stream_constraints={"video": True, "audio": False},
+    )
