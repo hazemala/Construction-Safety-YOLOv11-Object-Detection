@@ -30,6 +30,25 @@ def load_model():
 
 model = load_model()
 
+# -----------------------
+# Helper: safe VideoWriter factory
+# -----------------------
+def create_video_writer(path, fps, width, height):
+    """Try common codecs and return a cv2.VideoWriter or raise."""
+    # Try H.264 (avc1) first (best browser compatibility)
+    fourccs = ["avc1", "mp4v", "X264", "H264"]
+    for code in fourccs:
+        try:
+            fourcc = cv2.VideoWriter_fourcc(*code)
+            writer = cv2.VideoWriter(path, fourcc, fps, (width, height))
+            if writer.isOpened():
+                return writer, code
+            else:
+                writer.release()
+        except Exception:
+            continue
+    raise RuntimeError("No suitable video codec available for VideoWriter.")
+
 # ----------------------------------------------
 # 🎛️ Mode Selection
 # ----------------------------------------------
