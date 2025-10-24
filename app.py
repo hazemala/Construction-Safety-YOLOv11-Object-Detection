@@ -11,9 +11,9 @@ from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
 # ----------------------------------------------
 # 🧠 App Configuration
 # ----------------------------------------------
-st.set_page_config(page_title="YOLO Object Detection + Tracking", layout="wide")
-st.title("🎯 YOLO Object Detection + Tracking App")
-st.markdown("Upload an image or video for detection and tracking using YOLO.")
+st.set_page_config(page_title="YOLO Object Detection", layout="wide")
+st.title("🎯 YOLO Object Detection App")
+st.markdown("Upload an image, video, or use webcam for detection using YOLO.")
 
 # ----------------------------------------------
 # ⚙️ Sidebar Configuration
@@ -46,14 +46,14 @@ if mode == "Image":
         image = Image.open(uploaded_image)
         img_np = np.array(image)
 
-        # Inference
+        # Inference (detection only)
         results = model(img_np, conf=confidence)
         annotated = results[0].plot()
 
         st.image(annotated, caption="🔍 Detection Result", use_column_width=True)
 
 # ----------------------------------------------
-# 🎥 Video Mode (tracking, silent processing)
+# 🎥 Video Mode (silent processing)
 # ----------------------------------------------
 elif mode == "Video":
     uploaded_video = st.file_uploader("📹 Upload a video", type=["mp4", "mov", "avi", "mkv"])
@@ -74,7 +74,7 @@ elif mode == "Video":
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
-        output_path = "output_tracked.mp4"
+        output_path = "output_detected.mp4"
         out = cv2.VideoWriter(output_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (width, height))
 
         progress = st.progress(0)
@@ -85,8 +85,8 @@ elif mode == "Video":
             if not ret:
                 break
 
-            # 🔹 Run detection + tracking (default tracker)
-            results = model.track(frame, persist=True, conf=confidence)
+            # 🔹 Detection only
+            results = model(frame, conf=confidence)
             annotated_frame = results[0].plot()
 
             out.write(annotated_frame)
@@ -107,27 +107,27 @@ elif mode == "Video":
             video_bytes = f.read()
 
         st.download_button(
-            label="⬇️ Download Tracked Video",
+            label="⬇️ Download Detected Video",
             data=video_bytes,
-            file_name="tracked_output.mp4",
+            file_name="detected_output.mp4",
             mime="video/mp4"
         )
 
 # ----------------------------------------------
-# 🧍 Webcam Mode (Real-Time Tracking)
+# 🧍 Webcam Mode (Real-Time Detection)
 # ----------------------------------------------
 elif mode == "Webcam":
-    st.markdown("🎥 **Webcam mode active — with YOLO tracking. Press Stop to end.**")
+    st.markdown("🎥 **Webcam mode active — Real-time YOLO detection. Press Stop to end.**")
 
-    class YOLOTrackerTransformer(VideoTransformerBase):
+    class YOLODetectionTransformer(VideoTransformerBase):
 
         def transform(self, frame):
             img = frame.to_ndarray(format="bgr24")
-            results = model.track(img, conf=confidence, persist=True)
+            results = model(img, conf=confidence)
             return results[0].plot()
 
     webrtc_streamer(
-        key="yolo-webcam-tracker",
-        video_transformer_factory=YOLOTrackerTransformer,
+        key="yolo-webcam-detector",
+        video_transformer_factory=YOLODetectionTransformer,
         media_stream_constraints={"video": True, "audio": False},
     )
