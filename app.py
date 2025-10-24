@@ -56,21 +56,21 @@ if mode == "Image":
 elif mode == "Video":
     uploaded_video = st.file_uploader("📂 Upload a video", type=["mp4", "mov", "avi"])
     if uploaded_video is not None:
-        tfile = tempfile.NamedTemporaryFile(delete=False)
-        tfile.write(uploaded_video.read())
+        with open("input_video.mp4", "wb") as f:
+            f.write(uploaded_video.read())
 
-        cap = cv2.VideoCapture(tfile.name)
-        out_path = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False).name
+        cap = cv2.VideoCapture("input_video.mp4")
+        out_path = "output_video.mp4"
 
-        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        fourcc = cv2.VideoWriter_fourcc(*"avc1")  # ✅ works on browsers
         fps = int(cap.get(cv2.CAP_PROP_FPS))
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         out = cv2.VideoWriter(out_path, fourcc, fps, (width, height))
 
-        progress = st.progress(0)
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        frame_count = 0
+        progress = st.progress(0)
+        frame_i = 0
 
         while cap.isOpened():
             ret, frame = cap.read()
@@ -78,14 +78,15 @@ elif mode == "Video":
                 break
 
             results = model(frame, conf=confidence)
-            annotated_frame = results[0].plot()
-            out.write(annotated_frame)
+            annotated = results[0].plot()
+            out.write(annotated)
 
-            frame_count += 1
-            progress.progress(min(frame_count / total_frames, 1.0))
+            frame_i += 1
+            progress.progress(frame_i / total_frames)
 
         cap.release()
         out.release()
+
         st.success("✅ Video Processing Complete!")
         st.video(out_path)
 
