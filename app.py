@@ -35,7 +35,7 @@ model = load_model()
 # 🎛️ Mode Selection
 # ----------------------------------------------
 st.sidebar.subheader("📷 Select Input Source")
-mode = st.sidebar.radio("Choose Input Type", ["Image", "Video"])
+mode = st.sidebar.radio("Choose Input Type", ["Image", "Video", "Webcam"])
 
 # ----------------------------------------------
 # 📸 Image Mode
