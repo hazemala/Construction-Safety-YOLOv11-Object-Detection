@@ -158,7 +158,6 @@ elif mode == "Video":
         try:
             with open(output_path, "rb") as f:
                 video_bytes = f.read()
-            st.video(video_bytes)
             st.download_button("Download processed video", data=video_bytes, file_name="detections.mp4")
         except Exception as e:
             st.error("Failed to read/play the output file.")
