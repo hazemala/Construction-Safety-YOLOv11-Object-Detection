@@ -4,6 +4,7 @@ import tempfile
 import numpy as np
 from ultralytics import YOLO
 from PIL import Image
+import os
 from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
 
 # ----------------------------------------------
@@ -54,42 +55,95 @@ if mode == "Image":
 # 🎥 Video Mode
 # ----------------------------------------------
 elif mode == "Video":
-    uploaded_video = st.file_uploader("📂 Upload a video", type=["mp4", "mov", "avi"])
-    if uploaded_video is not None:
-        with open("input_video.mp4", "wb") as f:
-            f.write(uploaded_video.read())
+    uploaded_video = st.file_uploader("Upload a video", type=["mp4", "mov", "avi", "mkv"])
+    if uploaded_video:
+        st.info("Saving uploaded file...")
+        input_path = "input_video.mp4"
+        output_path = "output_video.mp4"
 
-        cap = cv2.VideoCapture("input_video.mp4")
-        out_path = "output_video.mp4"
+        # Save uploaded file to stable filename
+        try:
+            with open(input_path, "wb") as f:
+                f.write(uploaded_video.read())
+        except Exception as e:
+            st.error("Failed to save uploaded file.")
+            st.exception(e)
+            st.stop()
 
-        fourcc = cv2.VideoWriter_fourcc(*"avc1")  # ✅ works on browsers
-        fps = int(cap.get(cv2.CAP_PROP_FPS))
-        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        out = cv2.VideoWriter(out_path, fourcc, fps, (width, height))
+        # Process
+        cap = cv2.VideoCapture(input_path)
+        if not cap.isOpened():
+            st.error("Unable to open uploaded video.")
+            st.stop()
 
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        # Gather properties with safe fallbacks
+        fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 640)
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 480)
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+        st.write(f"Video properties — fps: {fps}, resolution: {width}x{height}, frames: {total_frames}")
+
+        try:
+            out, used_fourcc = create_video_writer(output_path, fps, width, height)
+            st.write(f"Using codec: {used_fourcc}")
+        except Exception as e:
+            st.error("Failed to create VideoWriter (codec issue).")
+            st.exception(e)
+            cap.release()
+            st.stop()
+
         progress = st.progress(0)
         frame_i = 0
+        try:
+            # Reduce OpenCV threads (cloud CPU stability)
+            cv2.setNumThreads(1)
+        except Exception:
+            pass
 
-        while cap.isOpened():
-            ret, frame = cap.read()
-            if not ret:
-                break
+        try:
+            while True:
+                ret, frame = cap.read()
+                if not ret:
+                    break
 
-            results = model(frame, conf=confidence)
-            annotated = results[0].plot()
-            out.write(annotated)
+                # Optionally resize large frames to speed up inference
+                # frame = cv2.resize(frame, (640, 480))
 
-            frame_i += 1
-            progress.progress(frame_i / total_frames)
+                # Inference (model accepts BGR numpy)
+                results = model(frame, conf=confidence)
+                annotated = results[0].plot()  # BGR
 
-        cap.release()
-        out.release()
+                # Write annotated frame to output file
+                out.write(annotated)
 
-        st.success("✅ Video Processing Complete!")
-        st.video(out_path)
+                frame_i += 1
+                if total_frames:
+                    progress.progress(min(frame_i / total_frames, 1.0))
+        except Exception as e:
+            st.error("Error during processing loop.")
+            st.exception(e)
+        finally:
+            # Always release handles
+            cap.release()
+            out.release()
 
+        # Confirm file exists & size
+        if not os.path.exists(output_path):
+            st.error("Processed output file not found.")
+            st.stop()
+
+        size_kb = os.path.getsize(output_path) / 1024
+        st.success(f"Processing finished — output file size: {size_kb:.1f} KB")
+
+        # Serve video via bytes (more reliable on some hosting)
+        try:
+            with open(output_path, "rb") as f:
+                video_bytes = f.read()
+            st.video(video_bytes)
+            st.download_button("Download processed video", data=video_bytes, file_name="detections.mp4")
+        except Exception as e:
+            st.error("Failed to read/play the output file.")
+            st.exception(e)
 # ----------------------------------------------
 # 🧍 Webcam Mode (works online)
 # ----------------------------------------------
