@@ -82,9 +82,7 @@ if page == "🏠 Home":
     ## 💻 **Application Features**
     - Real-time webcam detection  
     - Image detection  
-    - Video detection + processed video download  
-    - Clean and intuitive UI  
-    - High-speed inference using ONNX model  
+    - Video detection + processed video download   
 
     ---
 
