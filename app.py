@@ -11,13 +11,16 @@ from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
 # ----------------------------------------------
 # 🧠 App Configuration
 # ----------------------------------------------
-st.set_page_config(page_title="YOLO Object Detection", layout="wide")
-st.title("🎯 YOLO Object Detection App")
-st.markdown("Upload an image, video, or use webcam for detection using YOLO.")
+st.set_page_config(page_title="Construction Safety – YOLOv11", layout="wide")
+st.title("🏗️ Construction Safety Detection System")
+st.markdown("Real-time PPE detection using YOLOv11.")
 
 # ----------------------------------------------
-# ⚙️ Sidebar Configuration
+# 🧭 Sidebar Navigation
 # ----------------------------------------------
+st.sidebar.title("📌 Navigation")
+page = st.sidebar.radio("Go to:", ["🏠 Home", "🔍 Image", "🎥 Video", "📷 Webcam"])
+
 st.sidebar.header("⚙️ Settings")
 confidence = st.sidebar.slider("Confidence Threshold", 0.1, 1.0, 0.5, 0.05)
 
@@ -26,40 +29,115 @@ confidence = st.sidebar.slider("Confidence Threshold", 0.1, 1.0, 0.5, 0.05)
 # ----------------------------------------------
 @st.cache_resource
 def load_model():
-    model = YOLO("best.onnx")  # replace with your trained model
+    model = YOLO("best.onnx", task='detect')  # replace with your trained model
     return model
 
 model = load_model()
 
 # ----------------------------------------------
-# 🎛️ Mode Selection
+# 🏠 Home Page
 # ----------------------------------------------
-st.sidebar.subheader("📷 Select Input Source")
-mode = st.sidebar.radio("Choose Input Type", ["Image", "Video", "Webcam"])
+if page == "🏠 Home":
+
+    st.markdown("""
+    ## 🔍 **Project Summary**
+    This project improves safety compliance at construction sites by automatically detecting workers who are not wearing required Personal Protective Equipment (PPE).  
+    It uses a YOLOv11m object detection model trained on 2.2k images (Roboflow dataset) with default YOLO augmentations.
+
+    ---
+
+    ## 🎯 **Objectives**
+    - Ensure PPE compliance (helmet & vest detection)
+    - Provide real-time alerts
+    - Build a deployable, lightweight computer vision solution
+    - Support real-time, image, and video detection
+
+    ---
+
+    ## 🧠 **Model & Dataset**
+    **Model:** YOLOv11m  
+    **Classes Detected:**
+    - Helmet  
+    - Vest  
+    - No-Helmet  
+    - No-Vest  
+
+    **Training Dataset:**  
+    - 2.2k images  
+    - Roboflow preprocessing  
+    - YOLO default augmentation enabled  
+
+    ---
+
+    ## 📊 **Performance Metrics**
+    - **mAP50:** 93%  
+    - **mAP50-95:** 61%  
+    - **Precision:** 93%  
+    - **Recall:** 92%  
+
+    These results show strong detection accuracy suitable for real-time deployment.
+
+    ---
+
+    ## 💻 **Application Features**
+    - Real-time webcam detection  
+    - Image detection  
+    - Video detection + processed video download  
+    - Clean and intuitive UI  
+    - High-speed inference using ONNX model  
+
+    ---
+
+    ## 🧩 **Tech Stack**
+    - Python  
+    - Streamlit  
+    - YOLOv11  
+    - OpenCV  
+    - NumPy  
+    - Roboflow  
+
+    ---
+
+    ## 🚧 **Use Cases**
+    - Construction site safety monitoring  
+    - Automated PPE compliance  
+    - Reducing workplace accidents  
+    - CCTV-based live detection systems  
+
+    ---
+
+    ### ✅ Get started using the sidebar to run detection.
+    """)
 
 # ----------------------------------------------
-# 📸 Image Mode
+# 📸 IMAGE PAGE
 # ----------------------------------------------
-if mode == "Image":
+elif page == "🔍 Image":
+
+    st.header("📸 Image Detection")
+
     uploaded_image = st.file_uploader("📂 Upload an image", type=["jpg", "jpeg", "png"])
+
     if uploaded_image is not None:
         image = Image.open(uploaded_image)
         img_np = np.array(image)
 
-        # Inference (detection only)
         results = model(img_np, conf=confidence)
         annotated = results[0].plot()
 
         st.image(annotated, caption="🔍 Detection Result", use_column_width=True)
 
 # ----------------------------------------------
-# 🎥 Video Mode (silent processing)
+# 🎥 VIDEO PAGE
 # ----------------------------------------------
-elif mode == "Video":
+elif page == "🎥 Video":
+
+    st.header("🎥 Video Detection")
+
     uploaded_video = st.file_uploader("📹 Upload a video", type=["mp4", "mov", "avi", "mkv"])
 
     if uploaded_video:
-        st.info("📥 Saving and processing your video... Please wait.")
+        st.info("📥 Processing your video... Please wait.")
         tfile = tempfile.NamedTemporaryFile(delete=False)
         tfile.write(uploaded_video.read())
 
@@ -85,24 +163,18 @@ elif mode == "Video":
             if not ret:
                 break
 
-            # 🔹 Detection only
             results = model(frame, conf=confidence)
             annotated_frame = results[0].plot()
-
             out.write(annotated_frame)
 
             frame_i += 1
-            if total_frames > 0:
-                progress.progress(min(frame_i / total_frames, 1.0))
+            progress.progress(frame_i / total_frames)
 
         cap.release()
         out.release()
 
         st.success("✅ Video processed successfully!")
 
-        # ----------------------------------------------
-        # 💾 Download Processed Video
-        # ----------------------------------------------
         with open(output_path, "rb") as f:
             video_bytes = f.read()
 
@@ -114,13 +186,13 @@ elif mode == "Video":
         )
 
 # ----------------------------------------------
-# 🧍 Webcam Mode (Real-Time Detection)
+# 📷 WEBCAM PAGE
 # ----------------------------------------------
-elif mode == "Webcam":
-    st.markdown("🎥 **Webcam mode active — Real-time YOLO detection. Press Stop to end.**")
+elif page == "📷 Webcam":
+
+    st.header("📷 Real-Time Webcam Detection")
 
     class YOLODetectionTransformer(VideoTransformerBase):
-
         def transform(self, frame):
             img = frame.to_ndarray(format="bgr24")
             results = model(img, conf=confidence)
